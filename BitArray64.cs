@@ -284,20 +284,30 @@ public sealed class BitArray64
     }
     
     /// <summary>
-    /// Counts the number of set bits in a ulong using population count algorithm.
+    /// Counts the number of set bits in a ulong using Hamming Weight algorithm.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountBits(ulong value)
     {
-        // Uses the Brian Kernighan's algorithm: 
-        // Repeatedly clear the least significant set bit until 0
-        int count = 0;
-        while (value != 0)
-        {
-            value &= value - 1;
-            count++;
-        }
-        return count;
+        // Hamming Weight algorithm (SWAR - SIMD Within A Register)
+        // Parallel bit counting for 64-bit integers
+        const ulong m1 = 0x5555555555555555UL; // binary: 0101...
+        const ulong m2 = 0x3333333333333333UL; // binary: 00110011..
+        const ulong m4 = 0x0f0f0f0f0f0f0f0fUL; // binary: 0000111100001111...
+        const ulong h01 = 0x0101010101010101UL; // sum propagation mask
+        
+        // Step 1: Add adjacent bits in parallel (2-bit fields)
+        value -= (value >> 1) & m1;
+        
+        // Step 2: Add adjacent pairs in parallel (4-bit fields)
+        value = (value & m2) + ((value >> 2) & m2);
+        
+        // Step 3: Add adjacent 4-bit fields in parallel (8-bit fields)
+        value = (value + (value >> 4)) & m4;
+        
+        // Step 4: Propagate the sums to get total
+        // Multiply by ones-pattern and take highest byte
+        return (int)((value * h01) >> 56);
     }
     
     /// <summary>
